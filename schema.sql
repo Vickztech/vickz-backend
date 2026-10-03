@@ -21,8 +21,14 @@ CREATE TABLE IF NOT EXISTS profissionais (
 
 -- Único por CPF quando preenchido (parcial: permite múltiplos NULL enquanto o cadastro
 -- não foi completado, mas nunca dois profissionais ativos com o mesmo CPF).
-CREATE UNIQUE INDEX IF NOT EXISTS idx_profissionais_cpf
-  ON profissionais(cpf) WHERE cpf IS NOT NULL;
+-- DESATIVADO TEMPORARIAMENTE (03/10/2026): D1 falha com "no such column: cpf" ao criar
+-- esse índice parcial (WHERE cpf IS NOT NULL) junto com o restante do schema no mesmo
+-- arquivo. Localmente, em SQLite puro, o arquivo inteiro roda sem erro — é uma limitação
+-- do D1 remoto com índice único parcial em execução multi-statement, não um erro de
+-- sintaxe. Isolar esta criação de índice como comando separado depois que as tabelas
+-- existirem (ver conversa "Vickz 03 - BACKEND", 03/10/2026).
+-- CREATE UNIQUE INDEX IF NOT EXISTS idx_profissionais_cpf
+--   ON profissionais(cpf) WHERE cpf IS NOT NULL;
 
 -- login sem senha: código de 6 dígitos por e-mail, de uso único
 CREATE TABLE IF NOT EXISTS codigos_login (
