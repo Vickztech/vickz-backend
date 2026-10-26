@@ -66,6 +66,10 @@ CREATE TABLE IF NOT EXISTS assinaturas (
   -- ("só incrementa se ainda não esgotou") em vez de contar linhas de `laudos` em duas
   -- etapas (ler, decidir, gravar) — isso é o que evita o laudo duplicado em corrida.
   consumidos_no_ciclo INTEGER NOT NULL DEFAULT 0,
+  -- Faturas mensais pagas no ciclo (0..12). A franquia é LIBERADA por fatura paga:
+  -- liberado = MIN(franquia_anual, CEIL(franquia_anual * faturas_pagas / 12)).
+  -- Impede pagar 1 mês, gastar a franquia anual inteira e cancelar.
+  faturas_pagas INTEGER NOT NULL DEFAULT 0,
   ciclo_inicio TEXT,
   ciclo_fim TEXT,
   atualizado_em TEXT DEFAULT CURRENT_TIMESTAMP
@@ -121,3 +125,12 @@ CREATE TABLE IF NOT EXISTS arts (
   criado_em TEXT DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(profissional_id, empreendimento_ref)
 );
+
+-- Idempotência do webhook: a Stripe reenvia eventos; cada fatura só conta uma vez.
+CREATE TABLE IF NOT EXISTS faturas_processadas (
+  invoice_id TEXT PRIMARY KEY,
+  processado_em TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Migração para bancos já existentes (rodar UMA vez; falha com "duplicate column" se já rodou):
+-- ALTER TABLE assinaturas ADD COLUMN faturas_pagas INTEGER NOT NULL DEFAULT 0;

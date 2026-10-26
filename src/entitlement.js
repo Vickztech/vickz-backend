@@ -16,6 +16,14 @@ import { uuid, agoraISO } from "./util.js";
  *   3. Crédito avulso comprado
  *   4. Nada disso -> negado
  */
+/** Franquia liberada até agora: 1/12 da franquia anual por fatura mensal paga, arredondado pra cima. */
+export function liberadoNoCiclo(assinatura) {
+  return Math.min(
+    assinatura.franquia_anual,
+    Math.ceil((assinatura.franquia_anual * assinatura.faturas_pagas) / 12)
+  );
+}
+
 export async function avaliarEntitlement(env, profissionalId) {
   const profissional = await env.DB.prepare(
     "SELECT cpf FROM profissionais WHERE id = ?"
@@ -29,12 +37,12 @@ export async function avaliarEntitlement(env, profissionalId) {
     return { autorizado: true, tipo_consumo: "gratis", motivo: "Primeiro laudo grátis (assinante)" };
   }
 
-  if (assinatura && assinatura.consumidos_no_ciclo < assinatura.franquia_anual) {
+  if (assinatura && assinatura.consumidos_no_ciclo < liberadoNoCiclo(assinatura)) {
     return {
       autorizado: true,
       tipo_consumo: "franquia",
       motivo: `Franquia do plano ${assinatura.plano}`,
-      restante_no_ciclo: assinatura.franquia_anual - assinatura.consumidos_no_ciclo - 1,
+      restante_no_ciclo: liberadoNoCiclo(assinatura) - assinatura.consumidos_no_ciclo - 1,
     };
   }
 
@@ -49,7 +57,7 @@ export async function avaliarEntitlement(env, profissionalId) {
   return {
     autorizado: false,
     motivo: assinatura
-      ? "Franquia do ciclo esgotada e sem crédito avulso"
+      ? "Franquia liberada até agora esgotada (nova liberação a cada mensalidade paga) e sem crédito avulso"
       : "Sem assinatura ativa e sem crédito avulso",
     acao_sugerida: "Assinar um plano ou comprar avulso em vickz.com.br",
   };
@@ -150,7 +158,7 @@ export async function consumirEntitlement(env, profissionalId, empreendimentoRef
     `UPDATE assinaturas SET consumidos_no_ciclo = consumidos_no_ciclo + 1, atualizado_em = ?
      WHERE profissional_id = ? AND status = 'ativa'
        AND ciclo_inicio <= ? AND ciclo_fim > ?
-       AND consumidos_no_ciclo < franquia_anual`
+       AND consumidos_no_ciclo < MIN(franquia_anual, (franquia_anual * faturas_pagas + 11) / 12)`
   ).bind(agora, profissionalId, agora, agora).run();
 
   if (incrementoFranquia.meta?.changes > 0) {

@@ -24,18 +24,17 @@ async function chamarStripe(env, caminho, corpo) {
   return dados;
 }
 
-// Cada plano tem 2 Price IDs na Stripe: mensal e anual (2 meses grátis, ver Seção 7 do
-// escopo — a franquia anual de laudos é a mesma nos dois casos, só muda o ciclo de cobrança).
+// Lançamento: só cobrança MENSAL. A franquia anual é liberada por fatura paga (ver
+// liberadoNoCiclo em entitlement.js). Planos anuais ficam fora até decisão de preço.
 const PRICE_POR_PLANO = (env) => ({
-  start: { mensal: env.STRIPE_PRICE_START, anual: env.STRIPE_PRICE_START_ANUAL },
-  pro: { mensal: env.STRIPE_PRICE_PRO, anual: env.STRIPE_PRICE_PRO_ANUAL },
-  expert: { mensal: env.STRIPE_PRICE_EXPERT, anual: env.STRIPE_PRICE_EXPERT_ANUAL },
+  start: env.STRIPE_PRICE_START,
+  pro: env.STRIPE_PRICE_PRO,
+  expert: env.STRIPE_PRICE_EXPERT,
 });
 
-export async function criarCheckoutAssinatura(env, profissional, plano, intervalo = "mensal") {
-  if (!["mensal", "anual"].includes(intervalo)) throw new Error(`Intervalo desconhecido: ${intervalo}`);
-  const priceId = PRICE_POR_PLANO(env)[plano]?.[intervalo];
-  if (!priceId) throw new Error(`Plano/intervalo desconhecido: ${plano}/${intervalo}`);
+export async function criarCheckoutAssinatura(env, profissional, plano) {
+  const priceId = PRICE_POR_PLANO(env)[plano];
+  if (!priceId) throw new Error(`Plano desconhecido: ${plano}`);
 
   return chamarStripe(env, "checkout/sessions", {
     mode: "subscription",
@@ -44,7 +43,7 @@ export async function criarCheckoutAssinatura(env, profissional, plano, interval
     customer_email: profissional.email,
     "metadata[profissional_id]": profissional.id,
     "metadata[plano]": plano,
-    "metadata[intervalo]": intervalo,
+    "metadata[intervalo]": "mensal",
     // index.html é uma SPA de arquivo único, sem rotas de servidor (ver Seção 12, Módulo 5 do
     // escopo — gap identificado e corrigido aqui). Em vez de um path que não existe, o retorno
     // da Stripe usa query params na própria raiz; o boot() do app lê isso e mostra o resultado.

@@ -227,9 +227,9 @@ export default {
 
       // --- cobrança ---
       if (rota === "POST /billing/checkout-assinatura") {
-        const { plano, intervalo } = await request.json();
+        const { plano } = await request.json();
         if (!FRANQUIA_POR_PLANO[plano]) return erro("Plano inválido");
-        const sessao = await criarCheckoutAssinatura(env, profissional, plano, intervalo || "mensal");
+        const sessao = await criarCheckoutAssinatura(env, profissional, plano);
         return json({ checkout_url: sessao.url });
       }
 
@@ -270,6 +270,11 @@ async function verificarLaudoPublico(request, env, laudoId) {
   });
 }
 
+// A Stripe moveu o campo da assinatura na fatura entre versões da API.
+function subscriptionDaFatura(fatura) {
+  return fatura?.subscription || fatura?.parent?.subscription_details?.subscription || null;
+}
+
 // Webhook da Stripe fica fora do fluxo autenticado (a Stripe não manda Authorization: Bearer
 // da nossa sessão — a autenticidade vem da assinatura HMAC verificada abaixo).
 async function tratarWebhookStripe(request, env) {
@@ -291,26 +296,67 @@ async function tratarWebhookStripe(request, env) {
          VALUES (?, 1, ?)
          ON CONFLICT(profissional_id) DO UPDATE SET quantidade = quantidade + 1, atualizado_em = ?`
       ).bind(profissionalId, agoraISO(), agoraISO()).run();
-    } else if (obj.metadata?.plano) {
+    } else if (obj.metadata?.plano && obj.payment_status === "paid") {
       const plano = obj.metadata.plano;
+      if (!FRANQUIA_POR_PLANO[plano]) return json({ ok: true });
       const agora = new Date();
       const fimCiclo = new Date(agora);
       fimCiclo.setFullYear(fimCiclo.getFullYear() + 1);
+      fimCiclo.setDate(fimCiclo.getDate() + 15); // folga p/ a 13ª fatura renovar o ciclo
 
+      // Cria/reativa a assinatura com 0 faturas contadas: quem conta é o invoice.paid
+      // (idempotente por invoice_id). Reentrega do MESMO evento não zera contadores.
       await env.DB.prepare(
-        `INSERT INTO assinaturas (id, profissional_id, stripe_subscription_id, plano, status, franquia_anual, consumidos_no_ciclo, ciclo_inicio, ciclo_fim, atualizado_em)
-         VALUES (?, ?, ?, ?, 'ativa', ?, 0, ?, ?, ?)
+        `INSERT INTO assinaturas (id, profissional_id, stripe_subscription_id, plano, status, franquia_anual, consumidos_no_ciclo, faturas_pagas, ciclo_inicio, ciclo_fim, atualizado_em)
+         VALUES (?, ?, ?, ?, 'ativa', ?, 0, 0, ?, ?, ?)
          ON CONFLICT(profissional_id) DO UPDATE SET
+           consumidos_no_ciclo = CASE WHEN assinaturas.stripe_subscription_id = excluded.stripe_subscription_id THEN assinaturas.consumidos_no_ciclo ELSE 0 END,
+           faturas_pagas = CASE WHEN assinaturas.stripe_subscription_id = excluded.stripe_subscription_id THEN assinaturas.faturas_pagas ELSE 0 END,
+           ciclo_inicio = CASE WHEN assinaturas.stripe_subscription_id = excluded.stripe_subscription_id THEN assinaturas.ciclo_inicio ELSE excluded.ciclo_inicio END,
+           ciclo_fim = CASE WHEN assinaturas.stripe_subscription_id = excluded.stripe_subscription_id THEN assinaturas.ciclo_fim ELSE excluded.ciclo_fim END,
            stripe_subscription_id = excluded.stripe_subscription_id,
            plano = excluded.plano, status = 'ativa',
            franquia_anual = excluded.franquia_anual,
-           consumidos_no_ciclo = 0,
-           ciclo_inicio = excluded.ciclo_inicio, ciclo_fim = excluded.ciclo_fim,
            atualizado_em = excluded.atualizado_em`
       ).bind(
         crypto.randomUUID(), profissionalId, obj.subscription, plano,
         FRANQUIA_POR_PLANO[plano], agora.toISOString(), fimCiclo.toISOString(), agoraISO()
       ).run();
+    }
+  }
+
+  // Cada fatura mensal paga libera mais 1/12 da franquia (idempotente por invoice_id).
+  if (evento.type === "invoice.paid") {
+    const subId = subscriptionDaFatura(obj);
+    if (!subId) return json({ ok: true });
+    const assinatura = await env.DB.prepare(
+      "SELECT faturas_pagas FROM assinaturas WHERE stripe_subscription_id = ?"
+    ).bind(subId).first();
+    // Fatura chegou antes do checkout.session.completed: 500 faz a Stripe reenviar.
+    if (!assinatura) return erro("Assinatura ainda não registrada, reenviar", 500);
+
+    try {
+      await env.DB.prepare("INSERT INTO faturas_processadas (invoice_id) VALUES (?)").bind(obj.id).run();
+    } catch (e) {
+      if (String(e.message || e).includes("UNIQUE")) return json({ ok: true }); // já contada
+      throw e;
+    }
+
+    if (assinatura.faturas_pagas >= 12) {
+      // 13ª fatura = novo ciclo anual: zera contadores
+      const agora = new Date();
+      const fim = new Date(agora);
+      fim.setFullYear(fim.getFullYear() + 1);
+      fim.setDate(fim.getDate() + 15);
+      await env.DB.prepare(
+        `UPDATE assinaturas SET faturas_pagas = 1, consumidos_no_ciclo = 0, status = 'ativa',
+         ciclo_inicio = ?, ciclo_fim = ?, atualizado_em = ? WHERE stripe_subscription_id = ?`
+      ).bind(agora.toISOString(), fim.toISOString(), agoraISO(), subId).run();
+    } else {
+      await env.DB.prepare(
+        `UPDATE assinaturas SET faturas_pagas = faturas_pagas + 1, status = 'ativa', atualizado_em = ?
+         WHERE stripe_subscription_id = ?`
+      ).bind(agoraISO(), subId).run();
     }
   }
 
@@ -323,7 +369,7 @@ async function tratarWebhookStripe(request, env) {
   if (evento.type === "invoice.payment_failed") {
     await env.DB.prepare(
       "UPDATE assinaturas SET status = 'inadimplente', atualizado_em = ? WHERE stripe_subscription_id = ?"
-    ).bind(agoraISO(), obj.subscription).run();
+    ).bind(agoraISO(), subscriptionDaFatura(obj)).run();
   }
 
   return json({ ok: true });
