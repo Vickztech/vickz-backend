@@ -3,7 +3,10 @@ main = "src/index.js"
 compatibility_date = "2026-09-29"
 
 [vars]
-APP_BASE_URL = "http://localhost:8080"
+APP_BASE_URL = "https://app.vickz.com.br"
+# Link/QR de verificação dos laudos: /verificar/<id> é rota do Worker (API), não do app.
+# Trocar para https://api.vickz.com.br quando o domínio da API existir.
+VERIFY_BASE_URL = "https://vickz-api.andreabreumsn.workers.dev"
 # Price IDs de TESTE (criados em 26/10/2026, tabela 149/229/349/299)
 STRIPE_PRICE_START  = "price_1UUrdVRoPaCDFGHknoPisAnA"
 STRIPE_PRICE_PRO    = "price_1UUrdWRoPaCDFGHkSeIIif9U"

@@ -165,7 +165,7 @@ export default {
         const artBytes = await (await env.ART_BUCKET.get(art.arquivo_url)).arrayBuffer();
         const artBase64 = bytesParaBase64(new Uint8Array(artBytes));
 
-        const urlVerificacao = `${env.APP_BASE_URL}/verificar/${laudo_id}`;
+        const urlVerificacao = `${env.VERIFY_BASE_URL || env.APP_BASE_URL}/verificar/${laudo_id}`;
         const { pdf_base64: pdfBlindadoBase64, hash_sha256 } = await blindarPdf(env, {
           pdfBase64: pdf_base64,
           artBase64,
