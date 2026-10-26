@@ -7,7 +7,7 @@ import { blindarPdf } from "./pdfservice.js";
 
 // Valores fechados na Seção 7 do escopo (01/10/2026) — franquia mais espaçada entre
 // planos, substituindo o 6/12/24 original.
-const FRANQUIA_POR_PLANO = { start: 4, pro: 6, expert: 8 };
+const FRANQUIA_POR_PLANO = { start: 6, pro: 12, expert: 24 };
 
 // "Token" aqui é só apresentação pro usuário — NÃO é token de LLM/IA, e não muda o
 // consumo real, que continua sendo por laudo inteiro (ver Seção 7.3 do escopo).
@@ -21,8 +21,8 @@ const TOKENS_POR_REAL = 5;
 // aqui inflaria tokens_totais_ciclo acima do que o cliente realmente pagou (ex.: Expert
 // mostraria 4.860 em vez de 4.050) — bug corrigido nesta revisão, não só a mudança de
 // grandeza pedida.
-const PRECO_ANUAL_POR_PLANO = { start: 2430.0, pro: 3321.0, expert: 4050.0 };
-const PRECO_AVULSO_REAIS = 810.0;
+const PRECO_ANUAL_POR_PLANO = { start: 1788.0, pro: 2748.0, expert: 4188.0 };
+const PRECO_AVULSO_REAIS = 299.0;
 
 function resumoTokens(assinatura) {
   if (!assinatura) return null;

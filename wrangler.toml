@@ -1,33 +1,23 @@
-name = "vickz-backend"
+name = "vickz-api"
 main = "src/index.js"
 compatibility_date = "2026-09-29"
 
-# Preencher depois de rodar: wrangler d1 create vickz-db
+[vars]
+APP_BASE_URL = "http://localhost:8080"
+# Price IDs de TESTE (criados em 26/10/2026, tabela 149/229/349/299)
+STRIPE_PRICE_START  = "price_1UUrdVRoPaCDFGHknoPisAnA"
+STRIPE_PRICE_PRO    = "price_1UUrdWRoPaCDFGHkSeIIif9U"
+STRIPE_PRICE_EXPERT = "price_1UUrdXRoPaCDFGHkbgoxx5RR"
+STRIPE_PRICE_AVULSO = "price_1UUrdXRoPaCDFGHk2yEYBTae"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "vickz-db"
 database_id = "88d8fb32-2279-41b7-b40c-d47fe02ab0aa"
 
-# Bucket R2 pra guardar os PDFs das ARTs enviadas (uma por empreendimento).
-# Preencher depois de rodar: wrangler r2 bucket create vickz-arts
 [[r2_buckets]]
 binding = "ART_BUCKET"
 bucket_name = "vickz-arts"
 
-# Segredos (nunca vão neste arquivo — configurar com `wrangler secret put NOME`):
-#   STRIPE_SECRET_KEY        -> chave secreta da Stripe (sk_live_... ou sk_test_...)
-#   STRIPE_WEBHOOK_SECRET    -> assinatura do webhook (whsec_...)
-#
-#   Catálogo Stripe final (conta Vickz, acct_1U5LR1RoPaCDFGHk), criado/corrigido em 01/10/2026:
-#   STRIPE_PRICE_START         -> price_1ULpqDRoPaCDFGHkvpbhGWXR (Start, 4 laudos/ano, R$243,00/mês)
-#   STRIPE_PRICE_START_ANUAL   -> price_1ULq11RoPaCDFGHk53ctWMBL (Start anual, R$2.430,00/ano)
-#   STRIPE_PRICE_PRO           -> price_1ULq3XRoPaCDFGHk1xGBh2R8 (Pro, 6 laudos/ano, R$332,10/mês)
-#   STRIPE_PRICE_PRO_ANUAL     -> price_1ULq9lRoPaCDFGHkBrIIl3y9 (Pro anual, R$3.321,00/ano)
-#   STRIPE_PRICE_EXPERT        -> price_1ULqDTRoPaCDFGHkz4aBGitg (Expert, 8 laudos/ano, R$405,00/mês)
-#   STRIPE_PRICE_EXPERT_ANUAL  -> price_1ULqaHRoPaCDFGHkhLuFwSmK (Expert anual, R$4.050,00/ano)
-#   STRIPE_PRICE_AVULSO        -> price_1ULqgFRoPaCDFGHkMKiL5Y8k (laudo avulso, pagamento único, R$810,00 — sem anual)
-#   RESEND_API_KEY           -> chave da Resend (ou outro provedor de e-mail transacional)
-#   TOKEN_SECRET             -> string aleatória longa, usada pra assinar token de sessão
-#   APP_BASE_URL             -> https://vickz.com.br (usado nos links do checkout, e-mail e verificação)
-#   PDF_SERVICE_URL          -> URL do vickz-pdf-service (ver pasta ../vickz-pdf-service)
-#   PDF_SERVICE_KEY          -> mesma chave configurada como VICKZ_PDF_SERVICE_KEY nesse serviço
+# Segredos (wrangler secret put): STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY,
+# TOKEN_SECRET, PDF_SERVICE_URL, PDF_SERVICE_KEY
