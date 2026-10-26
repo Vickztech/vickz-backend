@@ -8,7 +8,7 @@ export async function enviarEmail(env, { para, assunto, texto, anexoPdfBase64, n
   }
 
   const corpo = {
-    from: "VICKZ <contato@vickz.com.br>",
+    from: "VICKZ <contato@notificacoes.vickz.com.br>",
     to: [para],
     subject: assunto,
     text: texto,
