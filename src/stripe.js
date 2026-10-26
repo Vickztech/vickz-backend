@@ -65,20 +65,50 @@ export async function criarCheckoutAvulso(env, profissional) {
   });
 }
 
-// Verificação manual da assinatura do webhook (Stripe-Signature: t=...,v1=...)
-export async function verificarAssinaturaWebhook(corpoTexto, headerAssinatura, segredo) {
-  const partes = Object.fromEntries(
-    headerAssinatura.split(",").map((p) => p.split("="))
-  );
-  const payload = `${partes.t}.${corpoTexto}`;
+// Verificação da assinatura do webhook (Stripe-Signature: t=...,v1=...[,v1=...]).
+// - Rejeita evento com timestamp fora da janela de tolerância (contra replay).
+// - Compara via crypto.subtle.verify (tempo constante).
+// - Header malformado => false (o chamador responde 400). Secret ausente => erro de
+//   configuração (500 com mensagem clara), nunca um "falso válido".
+const TOLERANCIA_WEBHOOK_SEGUNDOS = 300;
+
+function hexParaBytes(hex) {
+  if (typeof hex !== "string" || hex.length === 0 || hex.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(hex)) return null;
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+  return bytes;
+}
+
+export async function verificarAssinaturaWebhook(corpoTexto, headerAssinatura, segredo, agoraSegundos = Math.floor(Date.now() / 1000)) {
+  if (!segredo) throw new Error("STRIPE_WEBHOOK_SECRET não configurado neste ambiente");
+  if (!headerAssinatura) return false;
+
+  let t = null;
+  const assinaturas = [];
+  for (const parte of headerAssinatura.split(",")) {
+    const i = parte.indexOf("=");
+    if (i < 0) continue;
+    const k = parte.slice(0, i).trim();
+    const v = parte.slice(i + 1).trim();
+    if (k === "t") t = v;
+    else if (k === "v1") assinaturas.push(v);
+  }
+  if (!t || !/^\d+$/.test(t) || assinaturas.length === 0) return false;
+  if (Math.abs(agoraSegundos - Number(t)) > TOLERANCIA_WEBHOOK_SEGUNDOS) return false;
+
   const chave = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(segredo),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["verify"]
   );
-  const assinaturaCalculada = await crypto.subtle.sign("HMAC", chave, new TextEncoder().encode(payload));
-  const hex = [...new Uint8Array(assinaturaCalculada)].map((b) => b.toString(16).padStart(2, "0")).join("");
-  return hex === partes.v1;
+  const dados = new TextEncoder().encode(`${t}.${corpoTexto}`);
+  // A Stripe pode mandar mais de um v1 durante a rotação do segredo: basta um bater.
+  for (const hex of assinaturas) {
+    const bytes = hexParaBytes(hex);
+    if (!bytes) continue;
+    if (await crypto.subtle.verify("HMAC", chave, bytes, dados)) return true;
+  }
+  return false;
 }
