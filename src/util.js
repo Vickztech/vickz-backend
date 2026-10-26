@@ -1,5 +1,15 @@
 // Helpers pequenos, sem dependência externa (Cloudflare Workers não usa Node.js puro).
 
+/** Base64 de bytes grandes sem estourar a pilha (String.fromCharCode(...bytes) falha acima de ~100 KB). */
+export function bytesParaBase64(bytes) {
+  let bin = "";
+  const passo = 0x8000;
+  for (let i = 0; i < bytes.length; i += passo) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + passo));
+  }
+  return btoa(bin);
+}
+
 export function uuid() {
   return crypto.randomUUID();
 }

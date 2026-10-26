@@ -3,6 +3,9 @@
 // a versão rasterizada + com QR + com permissão restrita + o hash SHA-256.
 
 export async function blindarPdf(env, { pdfBase64, artBase64, textoRodape, urlVerificacao }) {
+  if (!env.PDF_SERVICE_URL || !env.PDF_SERVICE_KEY) {
+    throw new Error("Serviço de PDF (blindagem) não configurado neste ambiente");
+  }
   const resp = await fetch(`${env.PDF_SERVICE_URL}/processar`, {
     method: "POST",
     headers: {

@@ -1,4 +1,4 @@
-import { json, erro, agoraISO, uuid, CORS_HEADERS } from "./util.js";
+import { json, erro, agoraISO, uuid, bytesParaBase64, CORS_HEADERS } from "./util.js";
 import { solicitarCodigo, verificarCodigo, autenticar } from "./auth.js";
 import { avaliarEntitlement, consumirEntitlement, marcarEntregue } from "./entitlement.js";
 import { criarCheckoutAssinatura, criarCheckoutAvulso, verificarAssinaturaWebhook } from "./stripe.js";
@@ -163,7 +163,7 @@ export default {
         if (!art) return erro("ART pendente para este empreendimento — realize upload da ART", 412);
 
         const artBytes = await (await env.ART_BUCKET.get(art.arquivo_url)).arrayBuffer();
-        const artBase64 = btoa(String.fromCharCode(...new Uint8Array(artBytes)));
+        const artBase64 = bytesParaBase64(new Uint8Array(artBytes));
 
         const urlVerificacao = `${env.APP_BASE_URL}/verificar/${laudo_id}`;
         const { pdf_base64: pdfBlindadoBase64, hash_sha256 } = await blindarPdf(env, {
